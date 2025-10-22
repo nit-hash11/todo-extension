@@ -5,16 +5,14 @@ const LAST_OPEN_DATE_KEY = 'lastOpenDate';
 
 // --- Utility Functions ---
 
-// Function to retrieve data from Chrome storage
 function getData(key) {
     return new Promise((resolve) => {
         chrome.storage.sync.get(key, (data) => {
-            resolve(data[key]);
+            resolve(data[key] || []);
         });
     });
 }
 
-// Function to save data to Chrome storage
 function saveData(data) {
     return new Promise((resolve) => {
         chrome.storage.sync.set(data, () => {
@@ -23,7 +21,11 @@ function saveData(data) {
     });
 }
 
-// Function to get the current date as a simple YYYY-MM-DD string
+// Custom promise-based setTimeout for async functions (used for the animation delay)
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function getTodayDateString() {
     return new Date().toISOString().split('T')[0];
 }
@@ -38,25 +40,46 @@ function createTaskElement(task, listArray, index, isSpillover = false) {
         li.classList.add('completed');
     }
 
+    // 1. Create Checkbox Element
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = task.completed;
+    checkbox.classList.add('task-checkbox');
+
+    // Completion Logic on Change
+    checkbox.addEventListener('change', async () => {
+        // 1. Instantly update the task status in the storage array
+        listArray[index].completed = checkbox.checked;
+
+        const key = isSpillover ? SPILLOVER_TASKS_KEY : TODAY_TASKS_KEY;
+        await saveData({ [key]: listArray });
+
+        // 2. Visually apply the 'completed' class immediately
+        li.classList.toggle('completed', checkbox.checked);
+
+        // 3. CRITICAL: Animation Logic
+        if (checkbox.checked) {
+            // If checking complete, trigger the fade-out animation
+            li.classList.add('fading-out');
+            await sleep(400); // Wait for the 400ms CSS animation to complete
+        } else {
+            // If unchecking, ensure the list updates immediately
+            await sleep(50);
+        }
+
+        // 4. Re-render the list to apply the new sorting order
+        initialize();
+    });
+
     const taskText = document.createElement('span');
     taskText.classList.add('task-text');
     taskText.textContent = task.text;
-
-    // Toggle completion on click
-    taskText.addEventListener('click', async () => {
-        listArray[index].completed = !listArray[index].completed;
-        // Save the list based on where the click happened
-        const key = isSpillover ? SPILLOVER_TASKS_KEY : TODAY_TASKS_KEY;
-        await saveData({ [key]: listArray });
-        // Re-render both lists to ensure state is accurate
-        initialize();
-    });
 
     const deleteBtn = document.createElement('button');
     deleteBtn.classList.add('delete-btn');
     deleteBtn.textContent = '✖';
 
-    // Delete task on click
+    // Delete task on click (Uses the correct original index)
     deleteBtn.addEventListener('click', async () => {
         listArray.splice(index, 1);
         const key = isSpillover ? SPILLOVER_TASKS_KEY : TODAY_TASKS_KEY;
@@ -64,12 +87,13 @@ function createTaskElement(task, listArray, index, isSpillover = false) {
         initialize();
     });
 
+    li.appendChild(checkbox);
     li.appendChild(taskText);
     li.appendChild(deleteBtn);
     return li;
 }
 
-// Function to render the task lists in the HTML
+// Function to render the task lists in the HTML (Includes Sorting Logic)
 function renderLists(todayTasks, spilloverTasks) {
     const taskList = document.getElementById('taskList');
     const spilloverList = document.getElementById('spilloverList');
@@ -77,81 +101,90 @@ function renderLists(todayTasks, spilloverTasks) {
     taskList.innerHTML = '';
     spilloverList.innerHTML = '';
 
-    // Render Today's Tasks
-    todayTasks.forEach((task, index) => {
-        taskList.appendChild(createTaskElement(task, todayTasks, index, false));
+    // Sort Today's Tasks (Incomplete first)
+    const sortedTodayTasks = todayTasks.slice().sort((a, b) => a.completed - b.completed);
+
+    // Render Sorted Today's Tasks
+    sortedTodayTasks.forEach((task) => {
+        // Find by unique ID
+        const originalIndex = todayTasks.findIndex(t => t.id === task.id);
+
+        if (originalIndex !== -1) {
+            taskList.appendChild(createTaskElement(task, todayTasks, originalIndex, false));
+        }
     });
+
+    // Sort Spillover Tasks (Incomplete first)
+    const sortedSpilloverTasks = spilloverTasks.slice().sort((a, b) => a.completed - b.completed);
 
     // Render Spillover Tasks
     const spilloverSection = document.getElementById('spilloverSection');
-    if (spilloverTasks && spilloverTasks.length > 0) {
+    if (sortedSpilloverTasks && sortedSpilloverTasks.length > 0) {
         spilloverSection.style.display = 'block';
-        spilloverTasks.forEach((task, index) => {
-            spilloverList.appendChild(createTaskElement(task, spilloverTasks, index, true));
+        sortedSpilloverTasks.forEach((task) => {
+            // Find by unique ID for spillover list
+            const originalIndex = spilloverTasks.findIndex(t => t.id === task.id);
+
+            if (originalIndex !== -1) {
+                spilloverList.appendChild(createTaskElement(task, spilloverTasks, originalIndex, true));
+            }
         });
     } else {
-        spilloverSection.style.display = 'none'; // Hide the section if no spillover tasks
+        spilloverSection.style.display = 'none';
     }
 }
 
-// --- Core Logic: Daily Rollover ---
+// --- Core Logic: Daily Rollover (Unchanged) ---
 
 async function handleDailyRollover(todayTasks, lastOpenDate) {
     const todayDate = getTodayDateString();
 
-    // Check if the extension was last opened on a different day
     if (lastOpenDate && lastOpenDate !== todayDate) {
-
         console.log("New day detected! Performing rollover.");
 
-        // 1. Identify incomplete tasks from yesterday (which are currently in todayTasks)
         const unfinishedTasks = todayTasks.filter(task => !task.completed);
-
-        // 2. Filter today's list to only include completed tasks (which we'll discard)
-        // and set the main list to be empty for the new day
         const newTodayTasks = [];
 
-        // 3. Save the unfinished tasks as the new spillover list
-        // Note: We don't need to save completed tasks from yesterday.
         await saveData({
             [SPILLOVER_TASKS_KEY]: unfinishedTasks,
-            [TODAY_TASKS_KEY]: newTodayTasks, // Empty the main list for the new day
+            [TODAY_TASKS_KEY]: newTodayTasks,
             [LAST_OPEN_DATE_KEY]: todayDate
         });
 
-        // Return the newly created lists for rendering
         return {
             todayTasks: newTodayTasks,
             spilloverTasks: unfinishedTasks
         };
 
     } else if (!lastOpenDate) {
-        // First-time open - set the date
         await saveData({ [LAST_OPEN_DATE_KEY]: todayDate });
     }
 
-    // No rollover needed or first time, just return the existing lists
-    const spilloverTasks = await getData(SPILLOVER_TASKS_KEY) || [];
+    const spilloverTasks = await getData(SPILLOVER_TASKS_KEY);
     return { todayTasks: todayTasks, spilloverTasks: spilloverTasks };
 }
 
 // --- Input Handling ---
 
-// Function to handle adding a new task (always goes to today's list)
 async function addTask() {
     const input = document.getElementById('taskInput');
     const text = input.value.trim();
 
     if (text) {
-        const tasks = await getData(TODAY_TASKS_KEY) || [];
-        const newTask = { text: text, completed: false };
+        const tasks = await getData(TODAY_TASKS_KEY);
+        // FIX: Assign a unique ID using a timestamp
+        const newTask = {
+            id: Date.now(),
+            text: text,
+            completed: false
+        };
+
         tasks.push(newTask);
 
         await saveData({ [TODAY_TASKS_KEY]: tasks });
 
-        input.value = ''; // Clear input field
+        input.value = '';
 
-        // Re-run initialization to re-render the lists
         initialize();
     }
 }
@@ -159,22 +192,18 @@ async function addTask() {
 // --- Initialization ---
 
 async function initialize() {
-    // 1. Load data from storage
-    const todayTasks = await getData(TODAY_TASKS_KEY) || [];
+    const todayTasks = await getData(TODAY_TASKS_KEY);
     const lastOpenDate = await getData(LAST_OPEN_DATE_KEY);
 
-    // 2. Handle the daily rollover logic
     const { todayTasks: finalTodayTasks, spilloverTasks: finalSpilloverTasks } =
         await handleDailyRollover(todayTasks, lastOpenDate);
 
-    // 3. Render the lists
     renderLists(finalTodayTasks, finalSpilloverTasks);
 
-    // 4. Set up event listeners (only on the first run)
-    if (!document.getElementById('addTaskButton').hasAttribute('data-listeners-set')) {
-        const addButton = document.getElementById('addTaskButton');
-        const input = document.getElementById('taskInput');
+    const addButton = document.getElementById('addTaskButton');
+    const input = document.getElementById('taskInput');
 
+    if (!addButton.hasAttribute('data-listeners-set')) {
         addButton.addEventListener('click', addTask);
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {

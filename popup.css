@@ -1,16 +1,150 @@
-/* Add this to the end of popup.css */
+body {
+    font-family: Arial, sans-serif;
+    min-width: 300px;
+    padding: 15px;
+    background-color: #f4f4f9;
+}
 
+h1 {
+    color: #333;
+    font-size: 1.2em;
+    margin-top: 0;
+    border-bottom: 2px solid #ddd;
+    padding-bottom: 5px;
+}
+
+.input-group {
+    display: flex;
+    margin-bottom: 15px;
+}
+
+#taskInput {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px 0 0 4px;
+    font-size: 14px;
+}
+
+#addTaskButton {
+    padding: 8px 12px;
+    background-color: #5cb85c;
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.1s;
+}
+
+#addTaskButton:hover {
+    background-color: #4cae4c;
+}
+
+/* Active/Clicked State (Darker green) */
+#addTaskButton:active {
+    background-color: #3e8e41;
+    transform: translateY(1px);
+}
+
+#taskList {
+    list-style: none;
+    padding: 0;
+}
+
+/* --- General Task Item Styling --- */
+.task-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* CRITICAL: Must define padding/margin/height for the fade-out transition */
+    padding: 10px;
+    height: auto;
+    margin-bottom: 5px;
+    /* -------------------------------------------------------------------- */
+
+    border-bottom: 1px solid #eee;
+    background-color: white;
+    border-radius: 4px;
+
+    /* CRITICAL: Smooth transition for visual effects and collapse */
+    transition:
+            opacity 0.4s ease-out,
+            background-color 0.3s ease,
+            transform 0.4s ease-out,
+            margin 0.4s ease-out,
+            height 0.4s ease-out,
+            padding 0.4s ease-out;
+}
+
+/* NEW: The Fading Out class for smooth removal/collapse */
+.fading-out {
+    opacity: 0 !important;
+    height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-bottom: none !important;
+    overflow: hidden;
+    /* Transform pushes the element up slightly as it collapses for visual interest */
+    transform: translateY(-5px);
+}
+
+/* Completed Task Highlight (Light green tint) */
+.completed {
+    background-color: #e6ffe6;
+    border-left: 5px solid #5cb85c;
+    opacity: 0.8;
+}
+
+.task-checkbox {
+    margin-right: 10px;
+    cursor: pointer;
+    transform: scale(1.1);
+    min-width: 15px;
+}
+
+.task-text {
+    flex-grow: 1;
+    cursor: default;
+    margin-right: 10px;
+    word-wrap: break-word;
+}
+
+/* Style for Completed Tasks Text */
+.completed .task-text {
+    text-decoration: line-through;
+    color: #888;
+}
+
+/* Delete Button */
+.delete-btn {
+    background: none;
+    border: none;
+    color: #d9534f;
+    cursor: pointer;
+    font-weight: bold;
+    padding: 5px;
+    margin-left: 5px;
+}
+
+.delete-btn:hover {
+    color: #c9302c;
+}
+
+/* --- Spillover Section Styling (Unchanged) --- */
 #spilloverSection {
     margin-bottom: 20px;
     padding: 10px;
-    background-color: #ffe0b2; /* Light orange background */
+    background-color: #ffe0b2;
     border-radius: 4px;
     border: 1px solid #ffcc80;
 }
 
 #spilloverSection h2 {
     font-size: 1em;
-    color: #e65100; /* Darker orange text */
+    color: #e65100;
     margin-top: 0;
     border-bottom: 1px solid #ffcc80;
     padding-bottom: 5px;
@@ -21,7 +155,6 @@
     padding: 0;
 }
 
-/* Make spillover tasks look slightly different */
 #spilloverList .task-item {
     background-color: #fff3e0;
 }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TaskTracker",
   "version": "1.0",
-  "description": "Track your daily to-do list right from your browser.",
+  "description": "Track your daily and spilled-over tasks right from your browser.",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
